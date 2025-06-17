@@ -1,0 +1,50 @@
+services:
+  zookeeper:
+    # ZMĚNA ZDE: Používáme oficiální image od Apache
+    image: zookeeper:3.8
+    ports:
+      - "2181:2181"
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zookeeper:2888:3888;2181
+    healthcheck:
+      # Healthcheck je pro tento image trochu jiný
+      test: ["CMD", "bash", "-c", "echo 'ruok' | nc -w 1 localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    # ZMĚNA ZDE: Používáme robustní image od Bitnami
+    image: bitnami/kafka:3.7
+    ports:
+      - "9092:9092"
+    environment:
+      # Konfigurace pro Bitnami je trochu odlišná
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+  db:
+    image: timescale/timescaledb:latest-pg14
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: chronos_user
+      POSTGRES_PASSWORD: yoursecurepassword
+      POSTGRES_DB: chronos_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chronos_user -d chronos_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

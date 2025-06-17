@@ -1,0 +1,12 @@
+pandas
+numpy
+sqlalchemy
+psycopg2-binary
+timescaledb
+kafka-python
+websockets
+fastapi
+uvicorn
+python-dotenv
+jinja2
+plotly

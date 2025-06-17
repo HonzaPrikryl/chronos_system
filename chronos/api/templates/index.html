@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronos Dashboard</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1e1e1e; color: #d4d4d4; margin: 2em; }
+        h1, h2 { color: #4ec9b0; border-bottom: 1px solid #444; padding-bottom: 5px;}
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #444; padding: 10px; text-align: left; }
+        th { background-color: #2a2d2e; }
+        .buy { color: #73c991; }
+        .sell { color: #f47067; }
+        .strategy-card { background-color: #2a2d2e; border: 1px solid #444; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+        .active { color: #73c991; font-weight: bold; }
+        .inactive { color: #f47067; }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-2.33.0.min.js"></script>
+</head>
+<body>
+    <h1>Chronos Trading System Dashboard</h1>
+    <div id="equity-chart"></div>
+
+    <h2>Active Strategies</h2>
+    {% for strategy in strategies %}
+    <div class="strategy-card">
+        <strong>{{ strategy.name }}</strong> (ID: {{ strategy.id }})<br>
+        Class: {{ strategy.class_name }} on {{ strategy.symbol }} ({{ strategy.timeframe }})<br>
+        Status: 
+        {% if strategy.is_active %}
+            <span class="active">ACTIVE</span>
+        {% else %}
+            <span class="inactive">INACTIVE</span>
+        {% endif %}
+        <br>
+        Parameters: <code>{{ strategy.parameters }}</code>
+    </div>
+    {% endfor %}
+
+    <h2>Recent Trades (Last 20)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Time (UTC)</th>
+                <th>Strategy ID</th>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Fee</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trade in trades %}
+            <tr>
+                <td>{{ trade.executed_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ trade.strategy_id }}</td>
+                <td>{{ trade.symbol }}</td>
+                <td class="{{ 'buy' if trade.side == 'BUY' else 'sell' }}">{{ trade.side }}</td>
+                <td>{{ "%.4f"|format(trade.amount) }}</td>
+                <td>{{ "%.2f"|format(trade.price) }}</td>
+                <td>{{ "%.4f"|format(trade.fee) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <script>
+        // Data pro graf jsou vložena přímo z backendu
+        var graphJSON = {{ graph_json | safe }};
+        
+        // ZMĚNA ZDE: Kontrolujeme, zda objekt s daty pro graf není prázdný
+        if (graphJSON && graphJSON.data && graphJSON.data.length > 0) {
+            var chartDiv = document.getElementById('equity-chart');
+            Plotly.newPlot(chartDiv, graphJSON.data, graphJSON.layout);
+        } else {
+            // Volitelné: Zobrazíme zprávu, pokud data nejsou k dispozici
+            var chartDiv = document.getElementById('equity-chart');
+            chartDiv.innerHTML = '<p style="text-align: center; padding: 50px;">No portfolio history data available to display chart.</p>';
+        }
+    </script>
+</body>
+</html>
