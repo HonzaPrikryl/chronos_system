@@ -1,8 +1,5 @@
-# chronos/models/schema.py
-
 import datetime
 from sqlalchemy import (
-    create_engine,
     Column,
     Integer,
     String,
@@ -14,7 +11,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base
 
-# Vytvoření deklarativní základny, od které budou dědit všechny modely
 Base = declarative_base()
 
 class Strategy(Base):
@@ -90,7 +86,7 @@ class PortfolioHistory(Base):
     total_equity = Column(Float, nullable=False)
     unrealized_pnl = Column(Float, nullable=False)
     realized_pnl = Column(Float, nullable=False)
-    trade_id = Column(Integer) # Volitelný odkaz na obchod, který způsobil změnu
+    trade_id = Column(Integer)
 
     def __repr__(self):
         return f"<PortfolioHistory(time='{self.timestamp}', equity={self.total_equity})>"

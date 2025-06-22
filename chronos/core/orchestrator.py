@@ -1,5 +1,3 @@
-# chronos/core/orchestrator.py
-
 import json
 import logging
 import os
@@ -9,17 +7,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from collections import deque
-from typing import Optional # <-- PŘIDAT TENTO ŘÁDEK
+from typing import Optional
 
-# Importujeme modely a strategie
 from chronos.models.schema import Strategy as StrategyModel
 from chronos.strategies.ma_cross import MACrossStrategy
 
-# Nastavení logování
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Načtení proměnných prostředí
 load_dotenv()
 KAFKA_BROKER_URL = os.getenv('KAFKA_BROKER_URL', 'localhost:9092')
 DB_USER = os.getenv("POSTGRES_USER", "chronos_user")
@@ -29,11 +24,9 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-# Definice Kafka témat
 TOPIC_CANDLES = 'market.data.candles.binance.btcusdt.1m'
 TOPIC_SIGNALS = 'signals.generated'
 
-# Mapa, která přiřadí název třídy z databáze ke skutečné třídě v kódu
 STRATEGY_MAPPING = {
     'MACrossStrategy': MACrossStrategy
 }
@@ -62,7 +55,6 @@ class Orchestrator:
         return sessionmaker(bind=engine)()
 
     def load_strategies(self):
-        """Načte aktivní strategie z databáze a vytvoří jejich instance."""
         logger.info("Loading active strategies from database...")
         active_strategies = self.db_session.query(StrategyModel).filter(StrategyModel.is_active == True).all()
         
@@ -88,25 +80,20 @@ class Orchestrator:
             exit()
 
     def calculate_atr(self, symbol: str, period: int = 14) -> Optional[float]:
-        """Vypočítá Average True Range (ATR) pro daný symbol."""
         history = self.market_history.get(symbol)
         if not history or len(history) < period + 1:
-            return None # Nemáme dost dat
-
-        # Převedeme deque na DataFrame pro snadnější výpočty s pandas
+            return None
         df = pd.DataFrame(list(history))
         
-        # Výpočet True Range (TR)
         high_low = df['high'] - df['low']
         high_close = (df['high'] - df['close'].shift()).abs()
         low_close = (df['low'] - df['close'].shift()).abs()
         
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         
-        # Výpočet ATR jako exponenciální klouzavý průměr TR
         atr = tr.ewm(alpha=1/period, adjust=False).mean()
         
-        return atr.iloc[-1] # Vrátíme poslední hodnotu ATR
+        return atr.iloc[-1]
 
     def run(self):
         """Spustí hlavní smyčku Orchestratoru."""
@@ -124,11 +111,9 @@ class Orchestrator:
             candle_series = pd.Series(candle_data)
             symbol = candle_series['symbol']
 
-            # NOVÉ: Aktualizujeme historii trhu pro výpočet ATR
             if symbol in self.market_history:
                 self.market_history[symbol].append(candle_series)
             
-            # Projdi všechny načtené strategie a pošli jim svíčku, pokud na ni naslouchají
             for strategy in self.strategies.values():
                 if strategy.listens_to(symbol, candle_series['timeframe']):
                     strategy.on_candle(candle_series)
@@ -140,15 +125,13 @@ class Orchestrator:
                         final_signal = None
                         signal_type = signal_instruction.get('signal_type')
 
-                        # Překlad instrukce na finální signál
                         if signal_type == 'GO_LONG':
                             final_signal = {**signal_instruction, 'side': 'BUY'}
                         elif signal_type == 'GO_SHORT':
                             final_signal = {**signal_instruction, 'side': 'SELL'}
                         
                         if final_signal:
-                            del final_signal['signal_type'] # Odstraníme pomocný klíč
-
+                            del final_signal['signal_type']
                             current_atr = self.calculate_atr(symbol)
                             if current_atr:
                                 final_signal['atr'] = current_atr

@@ -1,5 +1,3 @@
-# chronos/execution/simulator.py
-
 import json
 import logging
 import os
@@ -11,11 +9,9 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from chronos.models.schema import Trade, PortfolioHistory
 
-# Nastavení logování
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Načtení proměnných prostředí
 load_dotenv()
 KAFKA_BROKER_URL = os.getenv('KAFKA_BROKER_URL', 'localhost:9092')
 DB_USER = os.getenv("POSTGRES_USER", "chronos_user")
@@ -25,7 +21,6 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-# Definice Kafka tématu
 TOPIC_ORDERS = 'orders.to_execute'
 
 class ExecutionSimulator:
@@ -40,18 +35,15 @@ class ExecutionSimulator:
         engine = create_engine(DATABASE_URL)
         self.db_session = sessionmaker(bind=engine)()
 
-        self.equity = 10000.0  # Počáteční kapitál, stejný jako v Risk Manageru
+        self.equity = 10000.0
         self.realized_pnl = 0.0
-        # Slovník pro sledování pozic, klíč je symbol (např. 'BTCUSDT')
         self.positions = {} 
         
         logger.info(f"Execution Simulator initialized with starting equity ${self.equity:.2f}")
-        # Zapíšeme počáteční stav portfolia do historie
         self._log_portfolio_state(datetime.datetime.now(datetime.timezone.utc))
 
     def _log_portfolio_state(self, timestamp: datetime.datetime, trade_id: int = None):
         """Uloží aktuální stav portfolia do databáze."""
-        # TODO: V budoucnu počítat nerealizovaný P&L na základě aktuální ceny trhu
         unrealized_pnl = 0.0 
         
         history_record = PortfolioHistory(
@@ -74,16 +66,12 @@ class ExecutionSimulator:
             logger.warning("="*50)
             logger.warning(f"  SIMULATING EXECUTION of order: {order}")
             
-            # Simulace slippage a poplatků
             price = order['signal_price']
             slippage = 0.0005
             executed_price = price * (1 + slippage) if order['side'] == 'BUY' else price * (1 - slippage)
             fee = order['quantity'] * executed_price * 0.001
-            
-            # Aktualizace equity o poplatek
             self.equity -= fee
 
-            # Zpracování logiky pozic
             symbol = order['symbol']
             side = order['side']
             quantity = order['quantity']
@@ -91,13 +79,11 @@ class ExecutionSimulator:
             current_position = self.positions.get(symbol)
             trade_pnl = 0.0
 
-            # Zjištění, zda je obchod opačný k současné pozici
             is_closing_trade = (current_position and 
                                ((side == 'SELL' and current_position['quantity'] > 0) or 
                                 (side == 'BUY' and current_position['quantity'] < 0)))
 
             if is_closing_trade:
-                # 1. UZAVŘENÍ A PŘEKLOPENÍ POZICE
                 closed_quantity = current_position['quantity']
                 entry_price = current_position['avg_price']
                 
@@ -108,13 +94,10 @@ class ExecutionSimulator:
                 logger.warning(f"  CLOSED position of {closed_quantity:.4f} {symbol}. P&L for this trade: ${trade_pnl:.2f}")
                 logger.warning(f"  New Realized P&L: ${self.realized_pnl:.2f}. New Equity: ${self.equity:.2f}")
 
-            # Otevření nové pozice nebo překlopení
             new_quantity = -quantity if side == 'SELL' else quantity
             self.positions[symbol] = {'quantity': new_quantity, 'avg_price': executed_price}
             log_action = "FLIPPED to" if is_closing_trade else "OPENED"
             logger.info(f"  {log_action} new position: {side} {quantity} {symbol} at ${executed_price:.2f}")
-
-            # Zápis obchodu do databáze
             trade_record = Trade(
                 strategy_id=order['strategy_id'],
                 exchange='binance_simulated',
@@ -132,7 +115,6 @@ class ExecutionSimulator:
                 self.db_session.add(trade_record)
                 self.db_session.commit()
                 
-                # Zápis do historie portfolia, POUZE pokud došlo k realizaci zisku/ztráty
                 if trade_pnl != 0:
                     self._log_portfolio_state(trade_record.executed_at, trade_id=trade_record.id)
                 
